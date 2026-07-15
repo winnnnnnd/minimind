@@ -1,0 +1,66 @@
+{
+  "created_at": "2026-07-15T21:35:43.631232",
+  "output_dir": "<REPO_ROOT>/evals/agent_math_results/issue804_gkd_readme_20",
+  "cases_file": "<REPO_ROOT>/evals/agent_math_results/issue804_gkd_readme_20/cases.jsonl",
+  "paired_results_file": "<REPO_ROOT>/evals/agent_math_results/issue804_gkd_readme_20/paired_results.jsonl",
+  "comparison_counts": {
+    "all_pass": 10,
+    "all_fail": 2,
+    "partial_pass": 8,
+    "full_sft_only": 1,
+    "opd_gkd_only": 0,
+    "agent_only": 4
+  },
+  "evaluation_config": {
+    "models": [
+      "minimind-3",
+      "out/opd_issue804_gkd_validation/opd_issue804_gkd_768.pth",
+      "model_files/agent_768.pth"
+    ],
+    "labels": [
+      "full_sft",
+      "opd_gkd",
+      "agent"
+    ],
+    "native_tokenizer": "model",
+    "device": "mps",
+    "dtype": "float16",
+    "max_new_tokens": 256,
+    "max_turns": 3,
+    "num_cases": 20,
+    "case_seed": 20260714,
+    "difficulty": "mixed",
+    "cases_file": null,
+    "generation_seed": 42,
+    "do_sample": false,
+    "temperature": 0.8,
+    "top_p": 0.9,
+    "require_tool_call": true
+  },
+  "models": {
+    "full_sft": {
+      "result_file": "<REPO_ROOT>/evals/agent_math_results/issue804_gkd_readme_20/full_sft.jsonl",
+      "passed": 11,
+      "total": 20,
+      "accuracy": 0.55,
+      "answer_correct": 11,
+      "used_math_tool": 15
+    },
+    "opd_gkd": {
+      "result_file": "<REPO_ROOT>/evals/agent_math_results/issue804_gkd_readme_20/opd_gkd.jsonl",
+      "passed": 13,
+      "total": 20,
+      "accuracy": 0.65,
+      "answer_correct": 13,
+      "used_math_tool": 19
+    },
+    "agent": {
+      "result_file": "<REPO_ROOT>/evals/agent_math_results/issue804_gkd_readme_20/agent.jsonl",
+      "passed": 17,
+      "total": 20,
+      "accuracy": 0.85,
+      "answer_correct": 17,
+      "used_math_tool": 20
+    }
+  }
+}

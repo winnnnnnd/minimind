@@ -1,0 +1,21 @@
+{
+  "warning": "These learning-curve results came from the earlier task-specific experimental OPD pipeline with Base-reference KL. They are feasibility evidence, not metrics from the clean generalized GKD implementation.",
+  "math_tooluse_500": {
+    "base": {"accuracy_percent": 45.6, "tool_call_percent": 85.6},
+    "opd40": {"accuracy_percent": 63.6, "tool_call_percent": 99.4},
+    "opd80": {"accuracy_percent": 63.4, "tool_call_percent": 99.8},
+    "opd120": {"accuracy_percent": 60.0, "tool_call_percent": 98.6},
+    "opd160": {"accuracy_percent": 60.2, "tool_call_percent": 99.2},
+    "opd200": {"accuracy_percent": 58.6, "tool_call_percent": 99.2},
+    "agent": {"accuracy_percent": 60.8, "tool_call_percent": 99.2}
+  },
+  "generated_general_qa_200_deepseek_judge": {
+    "base": 15.14,
+    "opd40": 15.09,
+    "opd80": 15.07,
+    "opd120": 14.64,
+    "opd160": 14.54,
+    "opd200": 14.29,
+    "agent": 2.73
+  }
+}

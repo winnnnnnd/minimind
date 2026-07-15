@@ -1,0 +1,7 @@
+{"id":"readme_yangtze","category":"事实问答","prompt":"你知道长江吗？","is_code":false,"reference_points":["长江是中国最长的河流","发源于青藏高原唐古拉山脉地区","自西向东注入东海"],"requirements":["不得把长江描述成省份、城市或山峰","回答应围绕问题，不作无关扩写"]}
+{"id":"readme_everest","category":"事实问答","prompt":"世界上最高的山峰是什么？","is_code":false,"reference_points":["珠穆朗玛峰","位于中国与尼泊尔边境的喜马拉雅山脉","海拔约8848.86米"],"requirements":["明确回答山峰名称"]}
+{"id":"readme_gravity","category":"事实问答","prompt":"万有引力是谁提出的？","is_code":false,"reference_points":["艾萨克·牛顿","万有引力定律发表于1687年的《自然哲学的数学原理》"],"requirements":["不得将万有引力定律归于爱因斯坦"]}
+{"id":"readme_panda","category":"事实问答","prompt":"你知道大熊猫的主要食物是什么吗？","is_code":false,"reference_points":["主要食物是竹子"],"requirements":["直接回答主要食物","不得把鱼类或海产品描述为主要食物"]}
+{"id":"readme_seawater","category":"科学解释","prompt":"海水为什么是咸的？","is_code":false,"reference_points":["岩石风化释放的离子经河流进入海洋","海底热液等也会提供溶解盐","水分蒸发而盐分保留并长期积累"],"requirements":["不得用阳光反射或光散射解释咸味"]}
+{"id":"readme_quicksort","category":"代码生成","prompt":"写一段python的快速排序代码","is_code":true,"reference_points":["包含正确的递归终止条件","正确完成分区和递归排序","能够处理重复元素"],"requirements":["Python代码语法正确且可运行","不能直接调用sorted代替快速排序核心实现"]}
+{"id":"readme_summary","category":"约束摘要","prompt":"截至2025年2月9日14时31分，电影《哪吒之魔童闹海》累计票房（含预售）突破78.09亿元，超过《星球大战：天行者崛起》的票房成绩，成为首部进入全球票房榜前40的亚洲电影。这一成就不仅标志着中国电影在国际市场的突破，也展示了中国动画电影的巨大潜力和市场吸引力。从这段文字总结20字的摘要给我。","is_code":false,"reference_points":["《哪吒之魔童闹海》票房进入全球前40","体现中国动画电影国际市场突破"],"requirements":["摘要不超过20个汉字","只输出摘要"]}

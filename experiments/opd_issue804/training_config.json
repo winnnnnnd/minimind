@@ -1,0 +1,31 @@
+{
+  "student": "minimind-3 (full_sft, 0.06B)",
+  "teacher": "agent_768.pth (0.06B)",
+  "training_rows": 200,
+  "data_note": "Agent-pass/Base-fail ToolUse prompts selected in the private experiment workspace; data selection is not part of the clean PR",
+  "epochs": 1,
+  "micro_batches": 200,
+  "optimizer_steps": 50,
+  "batch_size": 1,
+  "gradient_accumulation_steps": 4,
+  "learning_rate": 1e-6,
+  "learning_rate_end": 1e-7,
+  "lmbda": 1.0,
+  "beta": 0.5,
+  "temperature": 1.0,
+  "distill_temperature": 1.0,
+  "rollout_top_p": 1.0,
+  "rollout_top_k": 0,
+  "max_sequence_length": 1536,
+  "max_generation_length": 128,
+  "device": "mps",
+  "dtype": "float16",
+  "seed": 42,
+  "final_metrics": {
+    "gkd_loss": 0.0008829585858620703,
+    "forward_kl": 0.0035279877483844757,
+    "reverse_kl": 0.003766265930607915,
+    "top1_agreement": 1.0
+  },
+  "swanlab": "https://swanlab.cn/@lacuson/MiniMind-OPD/runs/sm6x3b85cc3re7qgncc6o"
+}
