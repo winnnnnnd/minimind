@@ -458,7 +458,22 @@ print(&quot;排序后的数组:&quot;, sorted_arr)
 
 完整生成记录见 [`results/opd_issue804/readme_qa/generations.json`](results/opd_issue804/readme_qa/generations.json)。
 
-## 5. 更大样本的探索阶段实验
+## 5. 早期自定义损失：Agent OPD + Base Reference KL
+
+在整理成论文规范的 generalized GKD 之前，我先实现并验证了一套面向 MiniMind Agent ToolUse 的任务定向损失：
+
+$$
+\mathcal{L}=\mathcal{L}_{\text{OPD-Agent}}(x_{\text{sweet}})
++\lambda_{\text{ref}}\,D_{\mathrm{KL}}(\pi_{\text{student}}\parallel\pi_{\text{base}}).
+$$
+
+第一项只在经过实测的 Agent-pass/Base-fail 甜点 prompt 上，让 Student 靠近 Agent Teacher；第二项在通用 SFT replay 数据上使用冻结的初始 Base 作为 reference，限制 Student 偏离原始通用分布。本次主实验使用 `lambda_ref=0.10`、reference replay ratio `0.25`，并在每次 replay 时才计算 reference KL，所以训练图中的 reference loss 会呈现规律性尖峰。
+
+这套损失在 500 道严格数学 ToolUse 评测上的最佳 checkpoint（OPD40）将准确率从 Base 的 `45.60%` 提高到 `63.60%`，提升 **18.00 个百分点**；`calculate_math` 调用率由 `85.60%` 提高到 `99.40%`。同时，200 道生成式通用问答的 DeepSeek Judge 分数从 `15.14` 变为 `15.09`，变化仅 `-0.05`，说明在这个早停位置上定向收益明显，而观测到的通用能力损失很小。
+
+它也暴露了明确边界：训练到 OPD200 后，数学准确率回落到 `58.60%`，通用问答下降到 `14.29`。因此 reference KL 能减缓遗忘，但不能保证训练越久越好；sweet-spot 数据比例、reference 强度和 early stopping 仍然重要。这套任务定制实现及筛选、replay、评测代码将保存在个人 `agent-opd-experiments` 分支，不进入只实现通用 GKD 的上游 PR。
+
+## 6. 更大样本的探索阶段实验
 
 以下曲线来自**早期任务定向 OPD 实验管线**，其中包含 Base-reference KL，并非干净 PR 中的 generalized GKD 默认实现；它们用于说明任务甜点区、训练步数和能力权衡，不作为最终实现的同配置复验结果。
 
@@ -480,7 +495,7 @@ print(&quot;排序后的数组:&quot;, sorted_arr)
 
 探索结果显示，40–80 个 micro-batch 已进入该任务的甜点区；继续训练并没有持续提高数学准确率，通用问答分数反而缓慢下降。这也是最终 PR 选择提供通用 GKD 机制、而不把任务筛选器、reference KL 或特定 early-stop 规则写死进训练器的原因。汇总数字见 [`exploratory_metrics.json`](experiments/opd_issue804/exploratory_metrics.json)。
 
-## 6. 复现命令
+## 7. 复现命令
 
 ### 训练
 
@@ -545,7 +560,7 @@ python scripts/eval_general_qa_deepseek.py \
   --output_dir evals/issue804_readme_qa
 ```
 
-## 7. 验证范围与边界
+## 8. 验证范围与边界
 
 - 单元测试与真实 MPS on-policy/off-policy 训练均已通过；正式保存的 63,912,192 参数 checkpoint 已严格重载。
 - 当前机器没有 CUDA，因此 CUDA/DDP 是代码兼容路径和仓库范式对齐，不能冒充为本次实际硬件验证。
@@ -553,7 +568,7 @@ python scripts/eval_general_qa_deepseek.py \
 - 训练 prompt 是为 Teacher-strong/Base-weak ToolUse 区域筛选的，因此收益不能外推到所有数学、Agent 或知识问答任务。
 - 模型、训练数据和 checkpoint 均不放入展示分支；上游 PR 只提交通用训练器、测试与必要文档。
 
-## 8. 分支职责
+## 9. 分支职责
 
 | 分支 | 用途 | 内容 |
 |---|---|---|
