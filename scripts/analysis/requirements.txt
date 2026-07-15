@@ -1,0 +1,2 @@
+# Optional dependencies for the review/report helpers in this directory.
+openpyxl>=3.1,<4

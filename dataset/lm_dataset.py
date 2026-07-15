@@ -119,6 +119,101 @@ class SFTDataset(Dataset):
         return torch.tensor(input_ids, dtype=torch.long), torch.tensor(labels, dtype=torch.long)
 
 
+class ReferenceReplayDataset(Dataset):
+    """Deterministic Base-policy replay data for reference KL regularization.
+
+    Unlike ``SFTDataset``, this class applies no random system-prompt or think
+    tag preprocessing.  The frozen Base and trainable student must receive
+    exactly the same fixed conversation, and only assistant tokens are included
+    in the KL mask.
+    """
+
+    def __init__(
+        self, jsonl_path, tokenizer, max_length=1024, max_samples=10000, sample_stride=10
+    ):
+        super().__init__()
+        if sample_stride < 1:
+            raise ValueError("reference replay sample_stride must be positive")
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.samples = []
+        with open(jsonl_path, 'r', encoding='utf-8') as f:
+            for line_number, line in enumerate(f, start=1):
+                if (line_number - 1) % sample_stride != 0:
+                    continue
+                line = line.strip()
+                if not line:
+                    continue
+                sample = json.loads(line)
+                if not isinstance(sample.get('conversations'), list):
+                    raise ValueError(
+                        f"{jsonl_path}:{line_number} must contain a conversations list"
+                    )
+                self.samples.append(sample)
+                if max_samples > 0 and len(self.samples) >= max_samples:
+                    break
+        if not self.samples:
+            raise ValueError(f"reference replay dataset is empty: {jsonl_path}")
+        self.bos_id = tokenizer(
+            f'{tokenizer.bos_token}assistant\n', add_special_tokens=False
+        ).input_ids
+        self.eos_id = tokenizer(
+            f'{tokenizer.eos_token}\n', add_special_tokens=False
+        ).input_ids
+
+    def __len__(self):
+        return len(self.samples)
+
+    def _render(self, conversations):
+        messages = []
+        tools = None
+        for raw_message in conversations:
+            message = dict(raw_message)
+            if message.get('role') == 'system' and message.get('tools'):
+                tools = (
+                    json.loads(message['tools'])
+                    if isinstance(message['tools'], str)
+                    else message['tools']
+                )
+            if message.get('tool_calls') and isinstance(message['tool_calls'], str):
+                message['tool_calls'] = json.loads(message['tool_calls'])
+            messages.append(message)
+        return self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=False,
+            tools=tools,
+        )
+
+    def _assistant_mask(self, input_ids):
+        mask = [False] * len(input_ids)
+        i = 0
+        while i < len(input_ids):
+            if input_ids[i:i + len(self.bos_id)] == self.bos_id:
+                start = i + len(self.bos_id)
+                end = start
+                while end < len(input_ids):
+                    if input_ids[end:end + len(self.eos_id)] == self.eos_id:
+                        break
+                    end += 1
+                stop = min(end + len(self.eos_id), len(input_ids))
+                for j in range(start, stop):
+                    mask[j] = True
+                i = stop
+            else:
+                i += 1
+        return mask
+
+    def __getitem__(self, index):
+        prompt = self._render(self.samples[index]['conversations'])
+        input_ids = self.tokenizer(prompt, add_special_tokens=False).input_ids[:self.max_length]
+        assistant_mask = self._assistant_mask(input_ids)
+        return {
+            'input_ids': torch.tensor(input_ids, dtype=torch.long),
+            'assistant_mask': torch.tensor(assistant_mask, dtype=torch.bool),
+        }
+
+
 class DPODataset(Dataset):
     def __init__(self, file_path, tokenizer, max_length=4096):
         super().__init__()
