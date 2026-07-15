@@ -16,7 +16,7 @@
 | **OPD-GKD** | **262/500 = 52.40%** | **492/500 = 98.40%** | **准确率 +7.00pp，调用率 +12.80pp** |
 | Agent / Teacher | 304/500 = 60.80% | 496/500 = 99.20% | Teacher 上界参考 |
 
-500 题配对结果中，OPD 让 105 题由错转对，同时有 70 题由对转错，净增加 35 题；双侧精确 McNemar 检验 `p=0.00996`。这说明规范 GKD 实现能够把 Teacher 的部分工具调用行为迁移给 Base，但并非所有 case 都单调改善，且仍未追平 Teacher，因此不应把它描述为“整体能力无损增强”。
+500 题配对结果中，OPD 让 105 题由错转对，同时有 70 题由对转错，净增加 35 题；双侧精确 McNemar 检验 `p=0.00996`。这说明规范 GKD 实现能够把 Teacher 的部分工具调用行为迁移给 Base.
 
 ![Issue #804 500-case Agent comparison](assets/opd_issue804/issue804_gkd_math_tooluse_500.png)
 
