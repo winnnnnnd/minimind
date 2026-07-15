@@ -1,6 +1,6 @@
 # MiniMind Agent OPD：任务定向实验代码
 
-> 这是个人 fork 的实验代码分支，用于公开 Issue #804 前期的 Agent ToolUse 数据构造、甜点区筛选、任务定向 OPD、Base-reference KL、评测和可视化代码。它不是准备合入官方仓库的最小 PR，也不等同于论文中的通用 GKD 实现。
+> 这是个人 fork 的实验代码分支，用于公开 Issue #804 前期的 Agent ToolUse 数据构造、任务定向 OPD、Base-reference KL、评测和可视化代码。它不是准备合入官方仓库的最小 PR，也不等同于论文中的通用 GKD 实现。
 
 - 干净 PR 实现：[`feat/804-on-policy-distillation`](https://github.com/winnnnnnd/minimind/tree/feat/804-on-policy-distillation)
 - 完整实验报告：[`agent-opd-showcase`](https://github.com/winnnnnnd/minimind/tree/agent-opd-showcase)
@@ -59,17 +59,6 @@ $$
 | `scripts/analysis/` | case 导出、问答生成、benchmark 准备和图表 |
 | `tests/` | 实验 loss、工具校验、评测解析和 rollout 参数测试 |
 
-## 本分支验证
-
-迁移到独立 worktree 后执行了完整语法检查和测试：
-
-```text
-Ran 45 tests in 0.057s
-OK
-```
-
-覆盖范围包括 top-k 候选策略、sampled-K1、完整词表反向 KL 梯度、Base-reference KL、assistant mask、空 mask、增量 token 后缀、reference replay 调度、工具数值边界、知识选择题解析、随机基线和通用问答数据生成。测试只保存在个人实验分支，不进入上游 PR。
-
 ## 环境与外部文件
 
 代码基于官方 MiniMind master。运行完整实验还需要自行准备以下未提交内容：
@@ -92,61 +81,7 @@ NVIDIA Ampere 或更新架构建议使用：
 --device cuda:0 --dtype bfloat16
 ```
 
-## 1. 基础检查
-
-```bash
-python -m py_compile \
-  dataset/lm_dataset.py \
-  trainer/opd_utils.py \
-  trainer/tool_utils.py \
-  trainer/train_opd.py \
-  scripts/generate_agent_opd_candidates.py \
-  scripts/select_agent_opd_prompts.py
-
-python -m unittest discover -s tests -p 'test_*utils.py' -v
-```
-
-## 2. 生成候选数据
-
-```bash
-python scripts/generate_agent_opd_candidates.py \
-  --num_candidates 8000 \
-  --output dataset/opd_agent_candidates/agent_math_candidates_8k.jsonl
-```
-
-这一步不加载模型，也不调用外部 LLM；所有表达式都可以由规则程序计算 Ground Truth。
-
-## 3. 级联筛选甜点区
-
-```bash
-python scripts/select_agent_opd_prompts.py \
-  --data_path dataset/opd_agent_candidates/agent_math_candidates_8k.jsonl \
-  --gt_count 1 \
-  --limit 3000 \
-  --screen_mode cascade \
-  --target_teacher_only 1200 \
-  --both_pass_ratio 0 \
-  --output_dir dataset/opd_agent_sweet_selection \
-  --device mps \
-  --dtype float16 \
-  --progress_interval 20
-```
-
-`cascade` 先运行 Base，只将 Base 失败的题交给 Agent，从而减少不必要的双模型全量推理；扩大 `--limit` 时可加入 `--reuse_cache` 续筛。
-
-## 4. 固定切分
-
-```bash
-python scripts/split_agent_opd_data.py \
-  --input dataset/opd_agent_sweet_selection/teacher_pass_student_fail.jsonl \
-  --output_dir dataset/opd_agent_sweet_selection/splits \
-  --train_count 1000 \
-  --validation_count 200 \
-  --pilot_count 200 \
-  --seed 42
-```
-
-## 5. OPD + Base reference KL pilot
+##  OPD + Base reference KL
 
 ```bash
 python trainer/train_opd.py \
@@ -196,7 +131,7 @@ python trainer/train_opd.py \
   --wandb_logdir swanlog
 ```
 
-## 6. 三模型数学 ToolUse 评测
+## 三模型数学 ToolUse 评测
 
 ```bash
 python scripts/eval_agent_math.py \
@@ -212,7 +147,7 @@ python scripts/eval_agent_math.py \
   --output_dir evals/agent_math_results/opd_pilot200_three_way
 ```
 
-## 7. 通用能力回归评测
+##  通用能力回归评测
 
 ```bash
 export DEEPSEEK_API_KEY='你的密钥'
@@ -224,24 +159,3 @@ python scripts/eval_general_qa_deepseek.py \
   --dtype float16 \
   --output_dir evals/general_qa_results/opd_pilot200_three_way
 ```
-
-DeepSeek 只作为匿名 Judge，不参与 SFT 或 OPD 训练。
-
-## 重要边界
-
-- 该实验分支为了研究特定 MiniMind Agent ToolUse 场景，包含明显的任务工程，不应被当作通用 GKD 标准答案。
-- 甜点数据来自 Teacher 与 Base 的实测差异，若更换权重必须重新筛选。
-- 500 题规则评测要求实际调用 `calculate_math` 且最终答案正确，不只是文本里碰巧出现 Ground Truth。
-- Base-reference KL 只在 replay batch 上产生非零曲线，规律性尖峰是稀疏回放设计，而不是必然的数值故障。
-- `loss/opd` 是蒸馏代理，不要求像监督交叉熵一样单调下降；应结合 reverse KL、工具成功率、通用回归和 checkpoint 横评判断。
-- 本分支不包含任何模型、私有 API key、训练数据、checkpoint 或完整实验日志。
-
-## 与上游 PR 的关系
-
-| 分支 | 定位 |
-|---|---|
-| `feat/804-on-policy-distillation` | 仅提交任务无关的 `train_opd.py`、`opd_utils.py` 和必要 `rollout_engine.py` 修改 |
-| `agent-opd-showcase` | 默认展示分支，保存实验报告、图表和轻量结果 |
-| `agent-opd-experiments` | 当前分支，保存可供复用的任务定向实验代码 |
-
-如果只想审阅或使用论文规范的 generalized GKD，请使用干净 PR 分支；如果想复现实验中的数据筛选、Base KL、工具交互和评测流程，再使用本分支。
