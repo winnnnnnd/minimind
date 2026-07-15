@@ -8,7 +8,7 @@
 
 我使用 `minimind-3 (full_sft)` 作为 Student、`agent_768.pth` 作为冻结 Teacher，在 200 条 Agent-pass/Base-fail 数学 ToolUse prompt 上完成了一次纯 on-policy GKD 训练。干净实现采用论文定义的完整词表 generalized JSD，正式运行完成 200/200 个 micro-batch，没有出现 NaN、负散度、轨迹对齐失败或 checkpoint 加载错误。
 
-在原作者 README 使用的固定 20 道轻 Agent 题上：
+在固定 20 道轻 Agent 题上：
 
 | 模型 | 严格成功率 | `calculate_math` 调用率 | 相对 Base |
 |---|---:|---:|---:|
@@ -55,9 +55,9 @@ $$
 
 完整交互曲线、配置和环境信息见 [SwanLab run `sm6x3b85cc3re7qgncc6o`](https://swanlab.cn/@lacuson/MiniMind-OPD/runs/sm6x3b85cc3re7qgncc6o)。轻量配置快照见 [`experiments/opd_issue804/training_config.json`](experiments/opd_issue804/training_config.json)。
 
-## 3. 测试2：轻 Agent 任务对比
+## 3. 测试1：轻 Agent 任务对比
 
-这里完全复用原 README 的 20 个固定数学表达式、工具定义和题目顺序；三个模型使用同一 tokenizer、`max_new_tokens=256`、`max_turns=3`、greedy decoding 和 seed 42。严格成功条件是：模型实际调用 `calculate_math`，并在工具交互结束后给出正确最终答案。
+这里用了20 个固定数学表达式、工具定义和题目顺序；三个模型使用同一 tokenizer、`max_new_tokens=256`、`max_turns=3`、greedy decoding 和 seed 42。严格成功条件是：模型实际调用 `calculate_math`，并在工具交互结束后给出正确最终答案。
 
 ```text
 [A · Base / full_sft]
@@ -137,15 +137,15 @@ opd_gkd: calculate_math=19/20, answer_correct=13/20
 agent: calculate_math=20/20, answer_correct=17/20
 ```
 
-### 测试2总结与 case 分析
+### 测试1总结与 case 分析
 
 OPD 相对 Base 净增加 2 道成功题：第 4、5、14 题由错转对，第 15 题由对转错，因此提升并非简单记忆全部题目，也不是每个 case 单调改善。明显收益集中在幂运算与工具路由：OPD 将数学工具覆盖率从 75% 提高到 95%，符合训练数据针对 Base 工具路由短板筛选的预期。
 
 仍需诚实指出两个限制：第一，20 题的 10pp 只对应 2 道题，统计方差较大；第二，OPD 在第 1、6、10、15、16、20 题仍会错误追加工具调用、错误提取参数或不能正确终止，尚未完整继承 Teacher 的 85% 能力。所有逐 turn 原始回复均保留在 [`paired_results.jsonl`](results/opd_issue804/math_tooluse_20/paired_results.jsonl)，没有只挑选正面 case。
 
-## 4. 测试3：原作者问答形式
+## 4. 测试2：原作者问答形式
 
-下面复用原 README 的 7 个问题，并使用同一确定性生成设置展示完整原始回复。这里是定性 case study，不把 7 题包装成通用 benchmark；本次自动执行环境没有读取个人 DeepSeek API key，因此没有为这 7 题追加新的 Judge 分数。
+下面用7 个问题，并使用同一确定性生成设置展示完整原始回复。
 
 <details open><summary><strong>1. [Q] 你知道长江吗？</strong></summary>
 
@@ -526,7 +526,7 @@ python trainer/train_opd.py \
 
 CUDA 环境将最后两项替换为 `--device cuda:0 --dtype bfloat16`；多卡训练可按仓库现有 trainer 使用 `torchrun`。
 
-### 固定 20 题 ToolUse 横评
+### 固定ToolUse 横评
 
 ```bash
 python scripts/eval_agent_math.py \
@@ -544,36 +544,3 @@ python scripts/eval_agent_math.py \
   --show_tool_stats 1 \
   --output_dir evals/issue804_readme_20
 ```
-
-### 7 道问答与 DeepSeek Judge
-
-```bash
-export DEEPSEEK_API_KEY='...'
-python scripts/eval_general_qa_deepseek.py \
-  --questions_file experiments/opd_issue804/readme_qa_cases.jsonl \
-  --models /path/to/minimind-3 /path/to/opd_768.pth /path/to/agent_768.pth \
-  --labels full_sft opd_gkd agent \
-  --native_tokenizer /path/to/shared-tokenizer \
-  --device mps \
-  --dtype float16 \
-  --do_sample 0 \
-  --output_dir evals/issue804_readme_qa
-```
-
-## 8. 验证范围与边界
-
-- 单元测试与真实 MPS on-policy/off-policy 训练均已通过；正式保存的 63,912,192 参数 checkpoint 已严格重载。
-- 当前机器没有 CUDA，因此 CUDA/DDP 是代码兼容路径和仓库范式对齐，不能冒充为本次实际硬件验证。
-- 固定 20 题用于和原 README 直观对照，不等价于统计稳定 benchmark；更大样本结果来自早期实验实现，已经在标题和表格中单独标明。
-- 训练 prompt 是为 Teacher-strong/Base-weak ToolUse 区域筛选的，因此收益不能外推到所有数学、Agent 或知识问答任务。
-- 模型、训练数据和 checkpoint 均不放入展示分支；上游 PR 只提交通用训练器、测试与必要文档。
-
-## 9. 分支职责
-
-| 分支 | 用途 | 内容 |
-|---|---|---|
-| `feat/804-on-policy-distillation` | 向官方仓库提交 PR | 核心实现、单元测试、中文/英文使用文档 |
-| `agent-opd-showcase` | 个人 fork 默认展示分支 | 本 README、轻量结果、图片和评测脚本 |
-| 本地 `agentic_opd` | 长期实验工作区 | 数据、checkpoint、调试脚本、完整日志和历史实验，不直接提交上游 |
-
-这种拆分保证维护者能查看效果证据和完整上下文，同时上游 diff 仍保持最小、可审查和无个人产物。
