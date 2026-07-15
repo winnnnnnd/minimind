@@ -13,9 +13,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SWAN_RUN = REPO_ROOT / "swanlog" / "run-20260715_211107-sm6x3b85cc3re7qgncc6o"
 DEFAULT_MATH_SUMMARY = (
     REPO_ROOT
-    / "evals"
-    / "agent_math_results"
-    / "issue804_gkd_readme_20"
+    / "results"
+    / "opd_issue804"
+    / "math_tooluse_500"
     / "summary.json"
 )
 DEFAULT_OUTPUT = REPO_ROOT / "evals" / "agent_opd_summary" / "figures"
@@ -185,7 +185,9 @@ def render_training(metrics, output):
 def bar_group(draw, box, title, labels, values, colors, y_max, suffix="%"):
     x0, y0, x1, y1 = box
     draw.text((x0 + 30, y0 + 24), title, font=font(28, True), fill=TEXT)
-    px0, py0, px1, py1 = x0 + 72, y0 + 92, x1 - 36, y1 - 95
+    # Leave a dedicated header band for the title and delta badge so values
+    # near 100% do not overlap the annotation.
+    px0, py0, px1, py1 = x0 + 72, y0 + 140, x1 - 36, y1 - 95
     for tick in range(0, int(y_max) + 1, 20):
         y = py1 - tick / y_max * (py1 - py0)
         draw.line((px0, y, px1, y), fill=GRID, width=2)
@@ -203,10 +205,12 @@ def bar_group(draw, box, title, labels, values, colors, y_max, suffix="%"):
 def render_math(summary, output):
     image = Image.new("RGB", (1800, 930), BG)
     draw = ImageDraw.Draw(image)
-    draw.text((62, 42), "原 README 固定 20 题：轻 Agent / ToolUse 对比", font=font(42, True), fill=TEXT)
+    models = summary["models"]
+    total = models["full_sft"]["total"]
+    draw.text((62, 42), f"{total} 题数学 ToolUse：Base / OPD-GKD / Agent 对比", font=font(42, True), fill=TEXT)
     draw.text(
         (62, 98),
-        "相同题目、工具定义和确定性解码｜成功条件：调用 calculate_math 且最终答案正确",
+        "前 20 题复用原 README，后续题由固定 seed 生成｜相同工具与 greedy 解码｜严格成功需工具调用且答案正确",
         font=font(22),
         fill=MUTED,
     )
@@ -217,13 +221,17 @@ def render_math(summary, output):
     keys = ["full_sft", "opd_gkd", "agent"]
     labels = ["Base", "OPD-GKD", "Agent"]
     colors = ["#7A8598", BLUE, ORANGE]
-    models = summary["models"]
     bar_group(draw, left, "严格成功率", labels, [models[k]["accuracy"] * 100 for k in keys], colors, 100)
     bar_group(draw, right, "calculate_math 调用率", labels, [models[k]["used_math_tool"] / models[k]["total"] * 100 for k in keys], colors, 100)
+    accuracy_gain = (models["opd_gkd"]["accuracy"] - models["full_sft"]["accuracy"]) * 100
+    tool_gain = (
+        models["opd_gkd"]["used_math_tool"] / models["opd_gkd"]["total"]
+        - models["full_sft"]["used_math_tool"] / models["full_sft"]["total"]
+    ) * 100
     draw.rounded_rectangle((465, 185, 775, 235), radius=20, fill="#DBEAFE")
-    centered_text(draw, 620, 210, "OPD vs Base  +10.0 pp", font(20, True), BLUE)
+    centered_text(draw, 620, 210, f"OPD vs Base  {accuracy_gain:+.1f} pp", font(20, True), BLUE)
     draw.rounded_rectangle((1335, 185, 1645, 235), radius=20, fill="#DBEAFE")
-    centered_text(draw, 1490, 210, "OPD vs Base  +20.0 pp", font(20, True), BLUE)
+    centered_text(draw, 1490, 210, f"OPD vs Base  {tool_gain:+.1f} pp", font(20, True), BLUE)
     image.save(output, quality=95)
 
 
@@ -242,7 +250,7 @@ def main():
     metrics = load_swan_metrics(Path(args.swan_run).expanduser().resolve())
     summary = json.loads(Path(args.math_summary).read_text(encoding="utf-8"))
     training_path = output_dir / "issue804_gkd_training_curves.png"
-    math_path = output_dir / "issue804_light_agent_comparison.png"
+    math_path = output_dir / "issue804_gkd_math_tooluse_500.png"
     render_training(metrics, training_path)
     render_math(summary, math_path)
     print(json.dumps({"training": str(training_path), "math": str(math_path)}, ensure_ascii=False, indent=2))

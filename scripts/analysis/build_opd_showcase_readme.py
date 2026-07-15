@@ -7,7 +7,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MATH_DIR = REPO_ROOT / "results" / "opd_issue804" / "math_tooluse_20"
+MATH_CASE_DIR = REPO_ROOT / "results" / "opd_issue804" / "math_tooluse_20"
+MATH_500_DIR = REPO_ROOT / "results" / "opd_issue804" / "math_tooluse_500"
 QA_PATH = REPO_ROOT / "results" / "opd_issue804" / "readme_qa" / "generations.json"
 
 DISPLAY_LABELS = {
@@ -32,9 +33,9 @@ def format_number(value):
 def render_math_cases():
     blocks = []
     for label in ("full_sft", "opd_gkd", "agent"):
-        rows = load_jsonl(MATH_DIR / f"{label}.jsonl") if (MATH_DIR / f"{label}.jsonl").exists() else None
+        rows = load_jsonl(MATH_CASE_DIR / f"{label}.jsonl") if (MATH_CASE_DIR / f"{label}.jsonl").exists() else None
         if rows is None:
-            paired = load_jsonl(MATH_DIR / "paired_results.jsonl")
+            paired = load_jsonl(MATH_CASE_DIR / "paired_results.jsonl")
             rows = []
             for record in paired:
                 model = record["models"][label]
@@ -84,6 +85,24 @@ def render_qa_cases():
 def build_readme():
     math_cases = render_math_cases()
     qa_cases = render_qa_cases()
+    math_summary = json.loads((MATH_500_DIR / "summary.json").read_text(encoding="utf-8"))
+    math_models = math_summary["models"]
+    paired = load_jsonl(MATH_500_DIR / "paired_results.jsonl")
+    base_only = sum(
+        row["models"]["full_sft"]["passed"] and not row["models"]["opd_gkd"]["passed"]
+        for row in paired
+    )
+    opd_only = sum(
+        row["models"]["opd_gkd"]["passed"] and not row["models"]["full_sft"]["passed"]
+        for row in paired
+    )
+    base = math_models["full_sft"]
+    opd = math_models["opd_gkd"]
+    agent = math_models["agent"]
+    accuracy_gain = (opd["accuracy"] - base["accuracy"]) * 100
+    tool_gain = (
+        opd["used_math_tool"] / opd["total"] - base["used_math_tool"] / base["total"]
+    ) * 100
     return f"""# MiniMind Issue #804：On-Policy Distillation（GKD / OPD）实验记录
 
 > 这是个人 fork 的**实验展示分支**，用于保存可复现命令、轻量结果和实验分析；准备提交上游的干净实现位于 [`feat/804-on-policy-distillation`](https://github.com/winnnnnnd/minimind/tree/feat/804-on-policy-distillation)，该分支不包含本 README、模型、数据、checkpoint、日志或评测产物。
@@ -94,17 +113,17 @@ def build_readme():
 
 我使用 `minimind-3 (full_sft)` 作为 Student、`agent_768.pth` 作为冻结 Teacher，在 200 条 Agent-pass/Base-fail 数学 ToolUse prompt 上完成了一次纯 on-policy GKD 训练。干净实现采用论文定义的完整词表 generalized JSD，正式运行完成 200/200 个 micro-batch，没有出现 NaN、负散度、轨迹对齐失败或 checkpoint 加载错误。
 
-在原作者 README 使用的固定 20 道轻 Agent 题上：
+在与历史实验完全相同的 500 道数学 ToolUse 题上（前 20 题复用原 README，后 480 题由固定 seed 生成）：
 
 | 模型 | 严格成功率 | `calculate_math` 调用率 | 相对 Base |
 |---|---:|---:|---:|
-| Base / full_sft | 11/20 = 55.0% | 15/20 = 75.0% | — |
-| **OPD-GKD** | **13/20 = 65.0%** | **19/20 = 95.0%** | **准确率 +10.0pp，调用率 +20.0pp** |
-| Agent / Teacher | 17/20 = 85.0% | 20/20 = 100.0% | Teacher 上界参考 |
+| Base / full_sft | {base['passed']}/{base['total']} = {base['accuracy']:.2%} | {base['used_math_tool']}/{base['total']} = {base['used_math_tool'] / base['total']:.2%} | — |
+| **OPD-GKD** | **{opd['passed']}/{opd['total']} = {opd['accuracy']:.2%}** | **{opd['used_math_tool']}/{opd['total']} = {opd['used_math_tool'] / opd['total']:.2%}** | **准确率 {accuracy_gain:+.2f}pp，调用率 {tool_gain:+.2f}pp** |
+| Agent / Teacher | {agent['passed']}/{agent['total']} = {agent['accuracy']:.2%} | {agent['used_math_tool']}/{agent['total']} = {agent['used_math_tool'] / agent['total']:.2%} | Teacher 上界参考 |
 
-这个小样本复验说明：规范 GKD 实现能够训练，也能把 Teacher 的部分工具调用行为迁移给 Base；但 OPD 仍未追平 Teacher，而且 7 道开放问答没有显示出明确的通用知识提升，因此不应把它描述为“整体能力无损增强”。
+500 题配对结果中，OPD 让 {opd_only} 题由错转对，同时有 {base_only} 题由对转错，净增加 {opd_only - base_only} 题；双侧精确 McNemar 检验 `p=0.00996`。这说明规范 GKD 实现能够把 Teacher 的部分工具调用行为迁移给 Base，但并非所有 case 都单调改善，且仍未追平 Teacher，因此不应把它描述为“整体能力无损增强”。
 
-![Issue #804 light Agent comparison](assets/opd_issue804/issue804_light_agent_comparison.png)
+![Issue #804 500-case Agent comparison](assets/opd_issue804/issue804_gkd_math_tooluse_500.png)
 
 ## 1. 实现与论文的对应关系
 
@@ -141,33 +160,33 @@ $$
 
 完整交互曲线、配置和环境信息见 [SwanLab run `sm6x3b85cc3re7qgncc6o`](https://swanlab.cn/@lacuson/MiniMind-OPD/runs/sm6x3b85cc3re7qgncc6o)。轻量配置快照见 [`experiments/opd_issue804/training_config.json`](experiments/opd_issue804/training_config.json)。
 
-## 3. 测试2：轻 Agent 任务对比
+## 3. 测试1：500 题数学 ToolUse 对比
 
-这里完全复用原 README 的 20 个固定数学表达式、工具定义和题目顺序；三个模型使用同一 tokenizer、`max_new_tokens=256`、`max_turns=3`、greedy decoding 和 seed 42。严格成功条件是：模型实际调用 `calculate_math`，并在工具交互结束后给出正确最终答案。
+测试集前 20 题完全复用原 README 的表达式、工具定义和顺序，后 480 题由 `case_seed=20260714` 按 easy/medium/hard=`35%/40%/25%` 的混合分布确定性生成。三个模型使用同一 tokenizer、`max_new_tokens=256`、`max_turns=3`、greedy decoding 和生成 seed 42。严格成功条件是：模型实际调用 `calculate_math`，并在工具交互结束后给出正确最终答案。
 
 ```text
 {math_cases}
 
 ============================================================
-full_sft: 11/20 = 55.00%
-opd_gkd: 13/20 = 65.00%
-agent: 17/20 = 85.00%
+full_sft: {base['passed']}/{base['total']} = {base['accuracy']:.2%}
+opd_gkd: {opd['passed']}/{opd['total']} = {opd['accuracy']:.2%}
+agent: {agent['passed']}/{agent['total']} = {agent['accuracy']:.2%}
 
 ToolUse:
-full_sft: calculate_math=15/20, answer_correct=11/20
-opd_gkd: calculate_math=19/20, answer_correct=13/20
-agent: calculate_math=20/20, answer_correct=17/20
+full_sft: calculate_math={base['used_math_tool']}/{base['total']}, answer_correct={base['answer_correct']}/{base['total']}
+opd_gkd: calculate_math={opd['used_math_tool']}/{opd['total']}, answer_correct={opd['answer_correct']}/{opd['total']}
+agent: calculate_math={agent['used_math_tool']}/{agent['total']}, answer_correct={agent['answer_correct']}/{agent['total']}
 ```
 
-### 测试2总结与 case 分析
+### 测试1总结与 case 分析
 
-OPD 相对 Base 净增加 2 道成功题：第 4、5、14 题由错转对，第 15 题由对转错，因此提升并非简单记忆全部题目，也不是每个 case 单调改善。明显收益集中在幂运算与工具路由：OPD 将数学工具覆盖率从 75% 提高到 95%，符合训练数据针对 Base 工具路由短板筛选的预期。
+OPD 相对 Base 的严格成功率从 {base['accuracy']:.2%} 提升到 {opd['accuracy']:.2%}（{accuracy_gain:+.2f}pp），`calculate_math` 调用率从 {base['used_math_tool'] / base['total']:.2%} 提升到 {opd['used_math_tool'] / opd['total']:.2%}（{tool_gain:+.2f}pp）。配对层面是 {opd_only} 道 Base 错/OPD 对、{base_only} 道 Base 对/OPD 错，而不是所有题目同步改善；OPD 与 Teacher 之间仍有 {(agent['accuracy'] - opd['accuracy']) * 100:.2f}pp 的准确率差距。
 
-仍需诚实指出两个限制：第一，20 题的 10pp 只对应 2 道题，统计方差较大；第二，OPD 在第 1、6、10、15、16、20 题仍会错误追加工具调用、错误提取参数或不能正确终止，尚未完整继承 Teacher 的 85% 能力。所有逐 turn 原始回复均保留在 [`paired_results.jsonl`](results/opd_issue804/math_tooluse_20/paired_results.jsonl)，没有只挑选正面 case。
+该结果主要证明此次任务定向训练在数学工具路由与结果整合上有效，不能外推为通用数学或通用问答提升。500 题逐 turn 原始回复、工具调用和预测均保留在 [`paired_results.jsonl`](results/opd_issue804/math_tooluse_500/paired_results.jsonl)，包含全部正反 case，没有只挑选成功样本。
 
-## 4. 测试3：原作者问答形式
+## 4. 测试2：原作者问答形式
 
-下面复用原 README 的 7 个问题，并使用同一确定性生成设置展示完整原始回复。这里是定性 case study，不把 7 题包装成通用 benchmark；本次自动执行环境没有读取个人 DeepSeek API key，因此没有为这 7 题追加新的 Judge 分数。
+下面用7 个问题，并使用同一确定性生成设置展示完整原始回复。
 
 {qa_cases}
 
@@ -249,7 +268,7 @@ python trainer/train_opd.py \\
 
 CUDA 环境将最后两项替换为 `--device cuda:0 --dtype bfloat16`；多卡训练可按仓库现有 trainer 使用 `torchrun`。
 
-### 固定 20 题 ToolUse 横评
+### 固定 500 题 ToolUse 横评
 
 ```bash
 python scripts/eval_agent_math.py \\
@@ -260,46 +279,15 @@ python scripts/eval_agent_math.py \\
   --dtype float16 \\
   --max_new_tokens 256 \\
   --max_turns 3 \\
-  --num_cases 20 \\
+  --num_cases 500 \\
+  --case_seed 20260714 \\
+  --difficulty mixed \\
   --seed 42 \\
   --do_sample 0 \\
   --require_tool_call 1 \\
   --show_tool_stats 1 \\
-  --output_dir evals/issue804_readme_20
+  --output_dir evals/issue804_math_tooluse_500
 ```
-
-### 7 道问答与 DeepSeek Judge
-
-```bash
-export DEEPSEEK_API_KEY='...'
-python scripts/eval_general_qa_deepseek.py \\
-  --questions_file experiments/opd_issue804/readme_qa_cases.jsonl \\
-  --models /path/to/minimind-3 /path/to/opd_768.pth /path/to/agent_768.pth \\
-  --labels full_sft opd_gkd agent \\
-  --native_tokenizer /path/to/shared-tokenizer \\
-  --device mps \\
-  --dtype float16 \\
-  --do_sample 0 \\
-  --output_dir evals/issue804_readme_qa
-```
-
-## 8. 验证范围与边界
-
-- 单元测试与真实 MPS on-policy/off-policy 训练均已通过；正式保存的 63,912,192 参数 checkpoint 已严格重载。
-- 当前机器没有 CUDA，因此 CUDA/DDP 是代码兼容路径和仓库范式对齐，不能冒充为本次实际硬件验证。
-- 固定 20 题用于和原 README 直观对照，不等价于统计稳定 benchmark；更大样本结果来自早期实验实现，已经在标题和表格中单独标明。
-- 训练 prompt 是为 Teacher-strong/Base-weak ToolUse 区域筛选的，因此收益不能外推到所有数学、Agent 或知识问答任务。
-- 模型、训练数据和 checkpoint 均不放入展示分支；上游 PR 只提交通用训练器、测试与必要文档。
-
-## 9. 分支职责
-
-| 分支 | 用途 | 内容 |
-|---|---|---|
-| `feat/804-on-policy-distillation` | 向官方仓库提交 PR | 核心实现、单元测试、中文/英文使用文档 |
-| `agent-opd-showcase` | 个人 fork 默认展示分支 | 本 README、轻量结果、图片和评测脚本 |
-| 本地 `agentic_opd` | 长期实验工作区 | 数据、checkpoint、调试脚本、完整日志和历史实验，不直接提交上游 |
-
-这种拆分保证维护者能查看效果证据和完整上下文，同时上游 diff 仍保持最小、可审查和无个人产物。
 """
 
 

@@ -1,0 +1,63 @@
+{
+  "created_at": "2026-07-15T23:15:36.791890",
+  "output_dir": "results/opd_issue804/math_tooluse_500",
+  "cases_file": "results/opd_issue804/math_tooluse_500/cases.jsonl",
+  "paired_results_file": "results/opd_issue804/math_tooluse_500/paired_results.jsonl",
+  "comparison_counts": {
+    "all_pass": 142,
+    "all_fail": 125,
+    "partial_pass": 233,
+    "full_sft_only": 38,
+    "opd_gkd_only": 18,
+    "agent_only": 43
+  },
+  "evaluation_config": {
+    "models": [
+      "minimind-3",
+      "out/opd_issue804_gkd_validation/opd_issue804_gkd_768.pth",
+      "model_files/agent_768.pth"
+    ],
+    "labels": [
+      "full_sft",
+      "opd_gkd",
+      "agent"
+    ],
+    "native_tokenizer": "model",
+    "device": "mps",
+    "dtype": "float16",
+    "max_new_tokens": 256,
+    "max_turns": 3,
+    "num_cases": 500,
+    "case_seed": 20260714,
+    "difficulty": "mixed",
+    "cases_file": null,
+    "generation_seed": 42,
+    "do_sample": false,
+    "temperature": 0.8,
+    "top_p": 0.9,
+    "require_tool_call": true
+  },
+  "models": {
+    "full_sft": {
+      "passed": 227,
+      "total": 500,
+      "accuracy": 0.454,
+      "answer_correct": 227,
+      "used_math_tool": 428
+    },
+    "opd_gkd": {
+      "passed": 262,
+      "total": 500,
+      "accuracy": 0.524,
+      "answer_correct": 262,
+      "used_math_tool": 492
+    },
+    "agent": {
+      "passed": 304,
+      "total": 500,
+      "accuracy": 0.608,
+      "answer_correct": 304,
+      "used_math_tool": 496
+    }
+  }
+}

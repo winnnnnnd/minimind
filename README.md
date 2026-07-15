@@ -8,17 +8,17 @@
 
 我使用 `minimind-3 (full_sft)` 作为 Student、`agent_768.pth` 作为冻结 Teacher，在 200 条 Agent-pass/Base-fail 数学 ToolUse prompt 上完成了一次纯 on-policy GKD 训练。干净实现采用论文定义的完整词表 generalized JSD，正式运行完成 200/200 个 micro-batch，没有出现 NaN、负散度、轨迹对齐失败或 checkpoint 加载错误。
 
-在固定 20 道轻 Agent 题上：
+在与历史实验完全相同的 500 道数学 ToolUse 题上（前 20 题复用原 README，后 480 题由固定 seed 生成）：
 
 | 模型 | 严格成功率 | `calculate_math` 调用率 | 相对 Base |
 |---|---:|---:|---:|
-| Base / full_sft | 11/20 = 55.0% | 15/20 = 75.0% | — |
-| **OPD-GKD** | **13/20 = 65.0%** | **19/20 = 95.0%** | **准确率 +10.0pp，调用率 +20.0pp** |
-| Agent / Teacher | 17/20 = 85.0% | 20/20 = 100.0% | Teacher 上界参考 |
+| Base / full_sft | 227/500 = 45.40% | 428/500 = 85.60% | — |
+| **OPD-GKD** | **262/500 = 52.40%** | **492/500 = 98.40%** | **准确率 +7.00pp，调用率 +12.80pp** |
+| Agent / Teacher | 304/500 = 60.80% | 496/500 = 99.20% | Teacher 上界参考 |
 
-这个小样本复验说明：规范 GKD 实现能够训练，也能把 Teacher 的部分工具调用行为迁移给 Base；但 OPD 仍未追平 Teacher，而且 7 道开放问答没有显示出明确的通用知识提升，因此不应把它描述为“整体能力无损增强”。
+500 题配对结果中，OPD 让 105 题由错转对，同时有 70 题由对转错，净增加 35 题；双侧精确 McNemar 检验 `p=0.00996`。这说明规范 GKD 实现能够把 Teacher 的部分工具调用行为迁移给 Base，但并非所有 case 都单调改善，且仍未追平 Teacher，因此不应把它描述为“整体能力无损增强”。
 
-![Issue #804 light Agent comparison](assets/opd_issue804/issue804_light_agent_comparison.png)
+![Issue #804 500-case Agent comparison](assets/opd_issue804/issue804_gkd_math_tooluse_500.png)
 
 ## 1. 实现与论文的对应关系
 
@@ -55,9 +55,9 @@ $$
 
 完整交互曲线、配置和环境信息见 [SwanLab run `sm6x3b85cc3re7qgncc6o`](https://swanlab.cn/@lacuson/MiniMind-OPD/runs/sm6x3b85cc3re7qgncc6o)。轻量配置快照见 [`experiments/opd_issue804/training_config.json`](experiments/opd_issue804/training_config.json)。
 
-## 3. 测试1：轻 Agent 任务对比
+## 3. 测试1：500 题数学 ToolUse 对比
 
-这里用了20 个固定数学表达式、工具定义和题目顺序；三个模型使用同一 tokenizer、`max_new_tokens=256`、`max_turns=3`、greedy decoding 和 seed 42。严格成功条件是：模型实际调用 `calculate_math`，并在工具交互结束后给出正确最终答案。
+测试集前 20 题完全复用原 README 的表达式、工具定义和顺序，后 480 题由 `case_seed=20260714` 按 easy/medium/hard=`35%/40%/25%` 的混合分布确定性生成。三个模型使用同一 tokenizer、`max_new_tokens=256`、`max_turns=3`、greedy decoding 和生成 seed 42。严格成功条件是：模型实际调用 `calculate_math`，并在工具交互结束后给出正确最终答案。
 
 ```text
 [A · Base / full_sft]
@@ -127,21 +127,21 @@ $$
 [agent] 20/20 | ❌ | (348/(12))-(28)*(8) | gt=-195 | pred=29
 
 ============================================================
-full_sft: 11/20 = 55.00%
-opd_gkd: 13/20 = 65.00%
-agent: 17/20 = 85.00%
+full_sft: 227/500 = 45.40%
+opd_gkd: 262/500 = 52.40%
+agent: 304/500 = 60.80%
 
 ToolUse:
-full_sft: calculate_math=15/20, answer_correct=11/20
-opd_gkd: calculate_math=19/20, answer_correct=13/20
-agent: calculate_math=20/20, answer_correct=17/20
+full_sft: calculate_math=428/500, answer_correct=227/500
+opd_gkd: calculate_math=492/500, answer_correct=262/500
+agent: calculate_math=496/500, answer_correct=304/500
 ```
 
 ### 测试1总结与 case 分析
 
-OPD 相对 Base 净增加 2 道成功题：第 4、5、14 题由错转对，第 15 题由对转错，因此提升并非简单记忆全部题目，也不是每个 case 单调改善。明显收益集中在幂运算与工具路由：OPD 将数学工具覆盖率从 75% 提高到 95%，符合训练数据针对 Base 工具路由短板筛选的预期。
+OPD 相对 Base 的严格成功率从 45.40% 提升到 52.40%（+7.00pp），`calculate_math` 调用率从 85.60% 提升到 98.40%（+12.80pp）。配对层面是 105 道 Base 错/OPD 对、70 道 Base 对/OPD 错，而不是所有题目同步改善；OPD 与 Teacher 之间仍有 8.40pp 的准确率差距。
 
-仍需诚实指出两个限制：第一，20 题的 10pp 只对应 2 道题，统计方差较大；第二，OPD 在第 1、6、10、15、16、20 题仍会错误追加工具调用、错误提取参数或不能正确终止，尚未完整继承 Teacher 的 85% 能力。所有逐 turn 原始回复均保留在 [`paired_results.jsonl`](results/opd_issue804/math_tooluse_20/paired_results.jsonl)，没有只挑选正面 case。
+该结果主要证明此次任务定向训练在数学工具路由与结果整合上有效，不能外推为通用数学或通用问答提升。500 题逐 turn 原始回复、工具调用和预测均保留在 [`paired_results.jsonl`](results/opd_issue804/math_tooluse_500/paired_results.jsonl)，包含全部正反 case，没有只挑选成功样本。
 
 ## 4. 测试2：原作者问答形式
 
@@ -526,7 +526,7 @@ python trainer/train_opd.py \
 
 CUDA 环境将最后两项替换为 `--device cuda:0 --dtype bfloat16`；多卡训练可按仓库现有 trainer 使用 `torchrun`。
 
-### 固定ToolUse 横评
+### 固定 500 题 ToolUse 横评
 
 ```bash
 python scripts/eval_agent_math.py \
@@ -537,10 +537,12 @@ python scripts/eval_agent_math.py \
   --dtype float16 \
   --max_new_tokens 256 \
   --max_turns 3 \
-  --num_cases 20 \
+  --num_cases 500 \
+  --case_seed 20260714 \
+  --difficulty mixed \
   --seed 42 \
   --do_sample 0 \
   --require_tool_call 1 \
   --show_tool_stats 1 \
-  --output_dir evals/issue804_readme_20
+  --output_dir evals/issue804_math_tooluse_500
 ```
